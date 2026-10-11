@@ -32,9 +32,9 @@ Dashboard berada pada halaman **Dashboard** di aplikasi Streamlit. Visualisasi m
 Dataset ini adalah potret administratif historis tanpa ID siswa dan tanggal per semester, sehingga dashboard belum dapat menunjukkan tren waktu atau memantau siswa tertentu secara longitudinal.
 
 ## Menjalankan Sistem Machine Learning
-Pilih halaman **Prediksi risiko** pada sidebar. Isi usia, status biaya/beasiswa/tunggakan, unit yang diambil dan lulus, serta nilai rata-rata untuk dua semester; tekan **Hitung estimasi**. Model final dilatih pada seluruh data dan disimpan oleh sel ekspor notebook sebagai `model/contoh.joblib`. Aplikasi memuat artefak tersebut saat dijalankan, bukan melatih model ulang. Jalankan notebook hingga sel ekspor untuk membuat atau memperbarui file model sebelum menjalankan aplikasi. Hasil prediksi adalah sinyal untuk ditinjau staf, bukan keputusan otomatis.
+Pilih halaman **Prediksi risiko** pada sidebar. Isi usia, status biaya/beasiswa/tunggakan, unit yang diambil dan lulus, serta nilai rata-rata untuk dua semester; tekan **Hitung estimasi**. Model final dilatih pada seluruh data dan disimpan oleh sel ekspor notebook sebagai `model/model.joblib`. Aplikasi memuat artefak tersebut saat dijalankan, bukan melatih model ulang. Jalankan notebook hingga sel ekspor untuk membuat atau memperbarui file model sebelum menjalankan aplikasi. Hasil prediksi adalah sinyal untuk ditinjau staf, bukan keputusan otomatis.
 
-Sertakan `model/contoh.joblib` di repository saat deployment. Di Streamlit Community Cloud, pilih Python 3.11 pada **Advanced settings**; versi scikit-learn dipatok ke 1.6.1 agar sesuai dengan artefak model.
+Sertakan `model/model.joblib` di repository saat deployment. Di Streamlit Community Cloud, pilih Python 3.11 pada **Advanced settings**; versi scikit-learn dipatok ke 1.6.1 agar sesuai dengan artefak model.
 
 **URL aplikasi Streamlit Community Cloud:** 
 
