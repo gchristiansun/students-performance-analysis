@@ -1,0 +1,237 @@
+from pathlib import Path
+
+import joblib
+import pandas as pd
+import plotly.express as px
+import streamlit as st
+
+
+DATA_URL = (
+	"https://raw.githubusercontent.com/dicodingacademy/dicoding_dataset/"
+	"main/students_performance/data.csv"
+)
+MODEL_PATH = Path(__file__).resolve().parent / "model" / "model.joblib"
+FEATURES = [
+	"Age_at_enrollment",
+	"Tuition_fees_up_to_date",
+	"Scholarship_holder",
+	"Debtor",
+	"Curricular_units_1st_sem_enrolled",
+	"Curricular_units_1st_sem_approved",
+	"Curricular_units_1st_sem_grade",
+	"Curricular_units_2nd_sem_enrolled",
+	"Curricular_units_2nd_sem_approved",
+	"Curricular_units_2nd_sem_grade",
+]
+STATUS_COLORS = {
+	"Graduate": "#198754",
+	"Dropout": "#d94841",
+	"Enrolled": "#e0a526",
+}
+
+st.set_page_config(
+	page_title="Jaya Jaya Institut | Student Success",
+	layout="wide",
+)
+
+
+@st.cache_data(ttl=3600)
+def load_data():
+	return pd.read_csv(DATA_URL, sep=";", encoding="utf-8-sig")
+
+
+@st.cache_resource
+def load_model():
+	return joblib.load(MODEL_PATH)
+
+
+try:
+	students = load_data()
+	model = load_model()
+except Exception as error:
+	st.error(f"Data atau model tidak dapat dimuat. Periksa file dan koneksi internet. Detail: {error}")
+	st.stop()
+
+st.title("Jaya Jaya Institut")
+st.caption("Student success monitoring - cohort dataset 2008-2019")
+page = st.sidebar.radio("Ruang kerja", ["Dashboard", "Prediksi risiko"])
+
+if page == "Dashboard":
+	st.subheader("Ringkasan performa siswa")
+	st.caption(
+		"Profil kohort historis. Dataset tidak memiliki ID siswa maupun dimensi waktu "
+		"per semester, sehingga visual ini bukan pemantauan longitudinal real-time."
+	)
+
+	with st.sidebar:
+		st.markdown("#### Filter kohort")
+		selected_status = st.multiselect(
+			"Status akhir", sorted(students["Status"].unique()),
+			default=sorted(students["Status"].unique()),
+		)
+		gender_codes = sorted(students["Gender"].unique().tolist())
+		selected_gender = st.multiselect(
+			"Kode gender", gender_codes, default=gender_codes
+		)
+		age_min, age_max = int(students["Age_at_enrollment"].min()), int(
+			students["Age_at_enrollment"].max()
+		)
+		age_range = st.slider(
+			"Usia saat mendaftar", age_min, age_max, (age_min, age_max)
+		)
+
+	filtered = students[
+		students["Status"].isin(selected_status)
+		& students["Gender"].isin(selected_gender)
+		& students["Age_at_enrollment"].between(*age_range)
+	]
+	if filtered.empty:
+		st.info("Tidak ada siswa yang cocok dengan filter ini.")
+	else:
+		total = len(filtered)
+		dropout_rate = filtered["Status"].eq("Dropout").mean()
+		graduate_rate = filtered["Status"].eq("Graduate").mean()
+		tuition_current = filtered["Tuition_fees_up_to_date"].eq(1).mean()
+		metric_cols = st.columns(4)
+		metric_cols[0].metric("Siswa dalam filter", f"{total:,}")
+		metric_cols[1].metric("Dropout", f"{dropout_rate:.1%}")
+		metric_cols[2].metric("Lulus", f"{graduate_rate:.1%}")
+		metric_cols[3].metric("Biaya kuliah aktif", f"{tuition_current:.1%}")
+
+		chart_left, chart_right = st.columns(2)
+		with chart_left:
+			outcomes = filtered["Status"].value_counts().rename_axis("Status").reset_index(
+				name="Jumlah"
+			)
+			st.plotly_chart(
+				px.pie(
+					outcomes,
+					names="Status",
+					values="Jumlah",
+					hole=0.52,
+					color="Status",
+					color_discrete_map=STATUS_COLORS,
+					title="Komposisi status akhir",
+				),
+				use_container_width=True,
+			)
+		with chart_right:
+			semester_grades = filtered.melt(
+				id_vars="Status",
+				value_vars=[
+					"Curricular_units_1st_sem_grade",
+					"Curricular_units_2nd_sem_grade",
+				],
+				var_name="Semester",
+				value_name="Nilai rata-rata",
+			)
+			semester_grades["Semester"] = semester_grades["Semester"].map(
+				{
+					"Curricular_units_1st_sem_grade": "Semester 1",
+					"Curricular_units_2nd_sem_grade": "Semester 2",
+				}
+			)
+			grade_summary = semester_grades.groupby(
+				["Status", "Semester"], as_index=False
+			)["Nilai rata-rata"].mean()
+			st.plotly_chart(
+				px.bar(
+					grade_summary,
+					x="Status",
+					y="Nilai rata-rata",
+					color="Semester",
+					barmode="group",
+					title="Rata-rata nilai per semester dan status",
+					color_discrete_sequence=["#2364aa", "#e07a35"],
+				),
+				use_container_width=True,
+			)
+
+		academic = filtered.groupby("Status", as_index=False).agg(
+			**{
+				"Rata-rata unit lulus S1": (
+					"Curricular_units_1st_sem_approved", "mean"
+				),
+				"Rata-rata unit lulus S2": (
+					"Curricular_units_2nd_sem_approved", "mean"
+				),
+			}
+		)
+		st.plotly_chart(
+			px.bar(
+				academic.melt("Status", var_name="Periode", value_name="Unit lulus"),
+				x="Status",
+				y="Unit lulus",
+				color="Periode",
+				barmode="group",
+				title="Unit kurikulum yang berhasil diselesaikan",
+				color_discrete_sequence=["#2364aa", "#e07a35"],
+			),
+			use_container_width=True,
+		)
+
+		with st.expander("Lihat data kohort terfilter"):
+			st.dataframe(filtered, use_container_width=True, hide_index=True)
+			st.download_button(
+				"Unduh data terfilter sebagai CSV",
+				filtered.to_csv(index=False).encode("utf-8"),
+				file_name="jaya_jaya_kohort_terfilter.csv",
+				mime="text/csv",
+			)
+
+else:
+	st.subheader("Estimasi risiko dropout")
+	st.write(
+		"Masukkan ringkasan siswa hingga semester kedua. Model memprediksi status "
+		"Dropout dibandingkan status lainnya; hasil adalah sinyal untuk ditinjau "
+		"oleh dosen pembimbing, bukan keputusan otomatis."
+	)
+	with st.form("student_risk_form"):
+		first, second = st.columns(2)
+		with first:
+			age = st.number_input("Usia saat mendaftar", 17, 70, 22)
+			tuition_paid = st.checkbox("Biaya kuliah tercatat lunas", value=True)
+			scholarship = st.checkbox("Penerima beasiswa")
+			debtor = st.checkbox("Memiliki tunggakan")
+			enrolled_1 = st.number_input("Unit diambil - semester 1", 0, 30, 6)
+			approved_1 = st.number_input("Unit lulus - semester 1", 0, 30, 4)
+		with second:
+			grade_1 = st.number_input("Nilai rata-rata - semester 1", 0.0, 20.0, 10.0)
+			enrolled_2 = st.number_input("Unit diambil - semester 2", 0, 30, 6)
+			approved_2 = st.number_input("Unit lulus - semester 2", 0, 30, 4)
+			grade_2 = st.number_input("Nilai rata-rata - semester 2", 0.0, 20.0, 10.0)
+		submitted = st.form_submit_button("Hitung estimasi", type="primary")
+
+	if submitted:
+		student = pd.DataFrame(
+			[[
+				age,
+				int(tuition_paid),
+				int(scholarship),
+				int(debtor),
+				enrolled_1,
+				approved_1,
+				grade_1,
+				enrolled_2,
+				approved_2,
+				grade_2,
+			]],
+			columns=FEATURES,
+		)
+		risk = model.predict_proba(student)[0, 1]
+		st.metric("Estimasi probabilitas dropout", f"{risk:.1%}")
+		if risk >= 0.5:
+			st.warning(
+				"Risiko model berada pada kategori tinggi. Tinjau kemajuan akademik "
+				"dan kendala siswa secara langsung sebelum menentukan tindak lanjut."
+			)
+		else:
+			st.success(
+				"Risiko model berada di bawah ambang 50%. Tetap pantau kemajuan "
+				"akademik dan kondisi siswa secara berkala."
+			)
+		st.caption(
+			"Model dilatih dengan seluruh kohort historis dan fitur semester 1–2. "
+			"Estimasi ini bukan probabilitas kausal dan belum menggantikan validasi "
+			"serta evaluasi berkala sebelum penggunaan operasional."
+		)
