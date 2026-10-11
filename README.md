@@ -11,7 +11,7 @@ Jaya Jaya Institut ingin menekan jumlah siswa yang tidak menyelesaikan studi. Da
 ### Cakupan Proyek
 - Menganalisis data historis untuk membandingkan status akhir, capaian akademik, dan indikator biaya kuliah.
 - Menyajikan dashboard interaktif dengan filter dan visualisasi, bukan tabel saja.
-- Melatih prototipe klasifikasi Random Forest untuk memperkirakan status Dropout menggunakan 10 fitur akademik dan administratif.
+- Melatih prototipe klasifikasi biner Random Forest dengan target `1 = Dropout` dan `0 = Graduate`, menggunakan 10 fitur akademik dan administratif. Siswa berstatus Enrolled dipisahkan dan tidak digunakan saat training atau evaluasi.
 - Mendokumentasikan evaluasi, batas penggunaan model, cara menjalankan aplikasi, dan rekomendasi tindak lanjut.
 
 ### Persiapan
@@ -27,22 +27,22 @@ streamlit run app.py
 ```
 
 ## Business Dashboard
-Dashboard berada pada halaman **Dashboard** di aplikasi Streamlit. Visualisasi menunjukkan komposisi status akhir, nilai rata-rata semester 1 dan 2 menurut status, serta unit kurikulum yang berhasil diselesaikan. KPI memperlihatkan jumlah siswa terfilter, tingkat dropout, tingkat kelulusan, dan proporsi biaya kuliah yang tercatat aktif. Filter usia, kode gender, dan status dapat digunakan untuk membandingkan profil kohort; data terfilter dapat diunduh dalam CSV.
+Dashboard berada pada halaman **Dashboard** di aplikasi Streamlit. Visualisasi menunjukkan komposisi status akhir, nilai rata-rata dan unit kurikulum per semester, tingkat Dropout menurut tunggakan/status pembayaran/beasiswa, serta tingkat Dropout menurut rentang unit lulus semester 2. Hover pada grafik faktor menampilkan jumlah siswa tiap kelompok. Analisis tingkat Dropout hanya memakai siswa berstatus Dropout atau Graduate; Enrolled tidak dihitung sebagai hasil akhir. Distribusi usia, KPI, filter usia/gender/status, dan unduhan CSV juga tersedia. Hubungan faktor dengan status bersifat deskriptif, bukan bukti sebab-akibat.
 
 Dataset ini adalah potret administratif historis tanpa ID siswa dan tanggal per semester, sehingga dashboard belum dapat menunjukkan tren waktu atau memantau siswa tertentu secara longitudinal.
 
 ## Menjalankan Sistem Machine Learning
-Pilih halaman **Prediksi risiko** pada sidebar. Isi usia, status biaya/beasiswa/tunggakan, unit yang diambil dan lulus, serta nilai rata-rata untuk dua semester; tekan **Hitung estimasi**. Model final dilatih pada seluruh data dan disimpan oleh sel ekspor notebook sebagai `model/model.joblib`. Aplikasi memuat artefak tersebut saat dijalankan, bukan melatih model ulang. Jalankan notebook hingga sel ekspor untuk membuat atau memperbarui file model sebelum menjalankan aplikasi. Hasil prediksi adalah sinyal untuk ditinjau staf, bukan keputusan otomatis.
+Pilih halaman **Prediksi risiko** pada sidebar. Isi usia, status biaya/beasiswa/tunggakan, unit yang diambil dan lulus, serta nilai rata-rata untuk dua semester; tekan **Hitung estimasi**. Target model adalah `1 = Dropout` dan `0 = Graduate`. Model final hanya dilatih pada baris berstatus Dropout atau Graduate dan disimpan oleh sel ekspor notebook sebagai `model/model.joblib`. Baris Enrolled tetap terpisah dari training/evaluasi; notebook menggunakan model final untuk menghasilkan estimasi status dan probabilitas dropout bagi baris Enrolled yang memiliki fitur lengkap. Aplikasi memuat artefak tersebut saat dijalankan, bukan melatih model ulang. Jalankan notebook hingga sel ekspor untuk membuat atau memperbarui file model sebelum menjalankan aplikasi. Hasil prediksi adalah sinyal untuk ditinjau staf, bukan keputusan otomatis.
 
 Sertakan `model/model.joblib` di repository saat deployment. Di Streamlit Community Cloud, pilih Python 3.11 pada **Advanced settings**; versi scikit-learn dipatok ke 1.6.1 agar sesuai dengan artefak model.
 
 **URL aplikasi Streamlit Community Cloud:** 
-
+https://analyse-students-performance.streamlit.app
 
 ## Evaluasi dan Kesimpulan
-Target didefinisikan sebagai klasifikasi biner: `Dropout` dibandingkan `Graduate` dan `Enrolled`. Pada holdout stratified 20% dengan `random_state=42`, Random Forest mencapai akurasi **87,2%**, precision dropout **80,4%**, recall dropout **79,6%**, dan F1 dropout **80,0%** (2.209 Graduate, 1.421 Dropout, 794 Enrolled pada keseluruhan data). Dari 284 kasus dropout pada data uji, model mendeteksi 226 dan melewatkan 58; false positive juga perlu ditinjau.
+Target didefinisikan sebagai klasifikasi biner: `Dropout = 1` dan `Graduate = 0`; 794 siswa Enrolled dikeluarkan dari pemodelan. Dari 4.424 baris sumber, 3.630 baris Dropout/Graduate digunakan untuk pemodelan (2.209 Graduate dan 1.421 Dropout). Pada holdout stratified 20% dengan `random_state=42` (442 Graduate dan 284 Dropout), Random Forest mencapai akurasi **90,8%**, precision dropout **88,1%**, recall dropout **88,4%**, dan F1 dropout **88,2%**. Model mendeteksi 251 dari 284 kasus dropout dan melewatkan 33; sebanyak 34 Graduate salah ditandai sebagai Dropout. Siswa Enrolled tidak masuk angka evaluasi tersebut.
 
-Proporsi dropout keseluruhan adalah **32,1%**. Keterkaitan deskriptif dengan dropout terlihat lebih tinggi pada siswa dengan tunggakan (62,0% vs. 28,3% tanpa tunggakan) dan biaya kuliah yang belum tercatat lunas (86,6% vs. 24,7% yang tercatat lunas). Fitur teratas menurut importance model adalah jumlah unit lulus dan nilai semester kedua, disusul capaian semester pertama. Keterkaitan ini bukan bukti sebab-akibat.
+Proporsi Dropout dari seluruh kohort adalah **32,1%**. Pada perbandingan Dropout/Graduate (Enrolled dikeluarkan dari penyebut), tingkat Dropout adalah 75,5% pada kelompok dengan tunggakan vs. 34,5% tanpa tunggakan, 94,0% pada biaya yang belum tercatat lunas vs. 30,7% yang tercatat lunas, dan 48,4% tanpa beasiswa vs. 13,8% dengan beasiswa. Berdasarkan unit lulus semester 2, tingkat Dropout adalah 92,1% untuk 0–2 unit, 36,4% untuk 3–5 unit, dan 8,2% untuk 6+ unit. Fitur teratas menurut importance model adalah unit lulus semester kedua (34,8%), unit lulus semester pertama (19,5%), dan nilai semester kedua (15,1%). Semua perbandingan ini bersifat deskriptif, bukan bukti sebab-akibat.
 
 **Kesimpulan:** institusi menghadapi proporsi dropout yang substansial. Capaian unit/nilai akademik dan status administrasi dapat menjadi sinyal untuk memprioritaskan peninjauan serta dukungan siswa. Prototipe menunjukkan baseline yang menjanjikan, tetapi menggunakan fitur hingga semester kedua; karena itu hasilnya belum merupakan sistem peringatan dini sebelum semester berjalan selesai. Validasi pada kohort baru, pemeriksaan fairness, dan evaluasi dampak intervensi diperlukan sebelum pemakaian operasional.
 
